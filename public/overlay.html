@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GSCRL Match Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gscrl-primary: #FF6B6B;
+      --gscrl-secondary: #4ECDC4;
+      --gscrl-dark: #1a1a2e;
+      --gscrl-darker: #0f0f1a;
+      --gscrl-light: #ffffff;
+      --gscrl-gray: #888899;
+      --color-success: #4ECDC4;
+      --color-warning: #FFE66D;
+      --font-display: 'Russo One', 'Impact', sans-serif;
+      --font-body: 'Inter', -apple-system, sans-serif;
+      --glow-color: var(--gscrl-primary);
+      --transition-base: 300ms ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      font-family: var(--font-body);
+      color: var(--gscrl-light);
+      background: transparent;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px;
+      width: 480px;
+    }
+
+    .beat {
+      background: rgba(15, 15, 26, 0.92);
+      border-radius: 8px;
+      border-left: 3px solid var(--beat-accent, var(--gscrl-primary));
+      padding: 10px 14px;
+      backdrop-filter: blur(4px);
+      transition: opacity var(--transition-base);
+    }
+
+    .beat.empty { opacity: 0.35; }
+
+    /* Now Fighting gets more visual weight */
+    .beat-now:not(.empty) {
+      padding: 14px 16px;
+      border-left-width: 4px;
+    }
+
+    .beat-label {
+      font-family: var(--font-display);
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--beat-accent, var(--gscrl-primary));
+      margin-bottom: 4px;
+    }
+
+    .beat-now:not(.empty) .beat-label {
+      font-size: 0.65rem;
+      margin-bottom: 8px;
+    }
+
+    .matchup {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      letter-spacing: 0.04em;
+    }
+
+    .beat-now:not(.empty) .matchup {
+      font-size: 1.5rem;
+      gap: 12px;
+    }
+
+    .beat-now:not(.empty) .vs {
+      font-size: 0.75rem;
+    }
+
+    .beat-now:not(.empty) .bracket-tag {
+      font-size: 0.7rem;
+      margin-top: 4px;
+    }
+
+    .vs {
+      font-size: 0.65rem;
+      color: var(--gscrl-gray);
+      flex-shrink: 0;
+    }
+
+    .player { flex: 1; }
+    .player.right { text-align: right; }
+
+    .bracket-tag {
+      font-family: var(--font-body);
+      font-size: 0.65rem;
+      color: var(--gscrl-gray);
+      margin-top: 2px;
+    }
+
+    .result-detail {
+      font-size: 0.7rem;
+      color: var(--gscrl-secondary);
+      margin-top: 3px;
+      font-style: italic;
+    }
+
+    .checkin-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gscrl-gray);
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .checkin-dot.ready { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+
+    /* Beat accent colors */
+    .beat-now    { --beat-accent: var(--gscrl-primary); }
+    .beat-next   { --beat-accent: var(--color-warning); }
+    .beat-result { --beat-accent: var(--gscrl-secondary); }
+
+    .winner-name {
+      color: var(--gscrl-primary);
+      text-shadow: 0 0 12px rgba(255, 107, 107, 0.5);
+    }
+
+    .no-data {
+      font-size: 0.75rem;
+      color: var(--gscrl-gray);
+      font-style: italic;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { border-left-color: var(--gscrl-primary); }
+      50%       { border-left-color: rgba(255, 107, 107, 0.4); }
+    }
+    .beat-now:not(.empty) { animation: pulse-border 2s ease infinite; }
+  </style>
+</head>
+<body>
+  <div class="container" id="root"></div>
+
+  <script>
+    const POLL_MS = 3000;
+
+    function checkinDot(checked) {
+      return `<span class="checkin-dot ${checked ? 'ready' : ''}"></span>`;
+    }
+
+    function renderMatchup(game) {
+      return `
+        <div class="matchup">
+          <span class="player">${game.player1}${checkinDot(game.checkedIn1)}</span>
+          <span class="vs">VS</span>
+          <span class="player right">${checkinDot(game.checkedIn2)}${game.player2}</span>
+        </div>
+        <div class="bracket-tag">${game.name}</div>
+      `;
+    }
+
+    function renderNowFighting(games) {
+      const isEmpty = !games.length;
+      const inner = isEmpty
+        ? '<span class="no-data">No active match</span>'
+        : games.map(renderMatchup).join('');
+      return `<div class="beat beat-now ${isEmpty ? 'empty' : ''}">
+        <div class="beat-label">Now Fighting</div>
+        ${inner}
+      </div>`;
+    }
+
+    function renderUpNext(games) {
+      const isEmpty = !games.length;
+      const inner = isEmpty
+        ? '<span class="no-data">No match called</span>'
+        : games.map(renderMatchup).join('');
+      return `<div class="beat beat-next ${isEmpty ? 'empty' : ''}">
+        <div class="beat-label">Up Next</div>
+        ${inner}
+      </div>`;
+    }
+
+    function renderResult(games) {
+      const isEmpty = !games.length;
+      const inner = isEmpty
+        ? '<span class="no-data">No results yet</span>'
+        : games.slice(0, 1).map(game => {
+            const isBye = game.resultAnnotation === 'BY';
+            const annotation = game.resultAnnotation && !isBye ? ` · ${game.resultAnnotation}` : '';
+            const winnerLine = game.winner
+              ? `<div class="result-detail">Winner: <span class="winner-name">${game.winner}</span>${annotation}</div>`
+              : isBye
+                ? `<div class="result-detail">Bye</div>`
+                : '';
+            return `${renderMatchup(game)}${winnerLine}`;
+          }).join('');
+      return `<div class="beat beat-result ${isEmpty ? 'empty' : ''}">
+        <div class="beat-label">Last Result</div>
+        ${inner}
+      </div>`;
+    }
+
+    function render(data) {
+      const root = document.getElementById('root');
+      if (!data || !data.ok) {
+        root.innerHTML = '<div class="beat"><span class="no-data">Connecting to TrueFinals…</span></div>';
+        return;
+      }
+
+      const t = data.tournaments[0];
+      if (!t) {
+        root.innerHTML = '<div class="beat"><span class="no-data">No tournament data</span></div>';
+        return;
+      }
+
+      root.innerHTML =
+        renderNowFighting(t.nowFighting) +
+        renderUpNext(t.upNext) +
+        renderResult(t.result);
+    }
+
+    async function fetchAndRender() {
+      try {
+        const res = await fetch('/api/story');
+        const data = await res.json();
+        render(data);
+      } catch (e) {
+        console.warn('fetch error', e);
+      }
+    }
+
+    fetchAndRender();
+    setInterval(fetchAndRender, POLL_MS);
+  </script>
+</body>
+</html>
