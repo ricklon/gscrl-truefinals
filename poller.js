@@ -87,6 +87,7 @@ function buildStory(games, players) {
 }
 
 let cache = null;
+let rawCache = {}; // { [tournamentId]: { games, players } } — for matchlog
 let lastFetch = 0;
 
 async function poll(tournamentIds) {
@@ -96,8 +97,9 @@ async function poll(tournamentIds) {
   try {
     const stories = await Promise.all(
       tournamentIds.map(async (id) => {
-        const { title, players } = await getStatic(id);   // cached; only hits API at startup / every 10 min
-        const games = await apiFetch(`/v1/tournaments/${id}/games`); // always fresh
+        const { title, players } = await getStatic(id);
+        const games = await apiFetch(`/v1/tournaments/${id}/games`);
+        rawCache[id] = { games, players };
         return { tournamentId: id, tournamentTitle: title, ...buildStory(games, players) };
       })
     );
@@ -111,4 +113,46 @@ async function poll(tournamentIds) {
   return cache;
 }
 
-module.exports = { poll };
+function buildMatchLog(tournamentIds) {
+  const entries = [];
+
+  for (const id of tournamentIds) {
+    const raw = rawCache[id];
+    if (!raw) continue;
+    const { games, players } = raw;
+    const { title } = staticCache[id] ?? {};
+
+    for (const g of games) {
+      if (!g.activeSince) continue; // never fought (bye, unavailable)
+      const isBye = g.resultAnnotation === 'BY';
+      if (isBye) continue;
+
+      const winnerSlot = g.slots.find(s => s.slotState === 'winner');
+      const winner = winnerSlot ? (players[winnerSlot.playerID] ?? null) : null;
+      const m = g.name && g.name.match(/^([WL]):(\d+)-/);
+      const bracket = m ? (m[1] === 'W' ? 'Winners' : 'Losers') : '';
+      const round = m ? `Round ${m[2]}` : g.name;
+
+      entries.push({
+        tournamentId: id,
+        tournamentTitle: title ?? id,
+        gameId: g.id,
+        name: g.name,
+        bracket,
+        round,
+        player1: players[g.slots[0]?.playerID] ?? 'TBD',
+        player2: players[g.slots[1]?.playerID] ?? 'TBD',
+        winner,
+        method: g.resultAnnotation ?? null,
+        state: g.state,
+        activeSince: g.activeSince,  // ms epoch — match started
+        endTime: g.endTime ?? null,  // ms epoch — match ended (null if still active)
+      });
+    }
+  }
+
+  entries.sort((a, b) => a.activeSince - b.activeSince);
+  return entries;
+}
+
+module.exports = { poll, buildMatchLog };

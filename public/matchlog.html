@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GSCRL Match Log</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --dark:    #0f0f1a;
+      --darker:  #080810;
+      --panel:   #1a1a2e;
+      --border:  rgba(78,205,196,0.2);
+      --primary: #FF6B6B;
+      --teal:    #4ECDC4;
+      --gray:    #888899;
+      --light:   #ffffff;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--dark);
+      color: var(--light);
+      min-height: 100vh;
+      padding: 32px 24px;
+    }
+    h1 {
+      font-family: 'Russo One', sans-serif;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 24px;
+    }
+
+    /* ── Stream start controls ── */
+    .controls {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+    input[type="datetime-local"] {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--light);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      padding: 8px 10px;
+      outline: none;
+    }
+    input[type="datetime-local"]:focus { border-color: var(--teal); }
+
+    button {
+      background: var(--teal);
+      color: var(--darker);
+      border: none;
+      border-radius: 4px;
+      font-family: 'Russo One', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 9px 16px;
+      cursor: pointer;
+      transition: opacity 150ms;
+    }
+    button:hover { opacity: 0.85; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal);
+    }
+
+    /* ── Match table ── */
+    .table-wrap { overflow-x: auto; margin-bottom: 24px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    th {
+      text-align: left;
+      font-size: 0.55rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gray);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.active-row td { background: rgba(255,107,107,0.06); }
+
+    .chapter-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--teal);
+      white-space: nowrap;
+    }
+    .chapter-time.no-offset { color: var(--gray); font-style: italic; }
+    .winner  { color: var(--primary); font-weight: 600; }
+    .method  { color: var(--gray); font-size: 0.75rem; }
+    .bracket { color: var(--gray); font-size: 0.75rem; }
+    .status-active {
+      display: inline-block;
+      font-size: 0.55rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
+    .duration {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--gray);
+    }
+
+    /* ── YouTube chapters output ── */
+    .chapters-section { margin-top: 8px; }
+    .chapters-section h2 {
+      font-family: 'Russo One', sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 10px;
+    }
+    textarea {
+      width: 100%;
+      background: var(--darker);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--light);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      padding: 12px;
+      resize: vertical;
+      min-height: 180px;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--teal); }
+    .copy-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
+      gap: 8px;
+      align-items: center;
+    }
+    .copy-confirm {
+      font-size: 0.7rem;
+      color: var(--teal);
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+    .copy-confirm.show { opacity: 1; }
+    .status-bar {
+      font-size: 0.7rem;
+      color: var(--gray);
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>GSCRL Match Log</h1>
+
+<div class="controls">
+  <div class="field">
+    <label>Stream / Recording Start</label>
+    <input type="datetime-local" id="stream-start" step="1">
+  </div>
+  <button onclick="refresh()">Refresh</button>
+  <button class="secondary" onclick="clearOffset()">Clear Offset</button>
+</div>
+
+<div class="status-bar" id="status">Loading…</div>
+
+<div class="table-wrap">
+  <table id="match-table">
+    <thead>
+      <tr>
+        <th>Chapter Time</th>
+        <th>Match</th>
+        <th>Bracket · Round</th>
+        <th>Winner</th>
+        <th>Method</th>
+        <th>Duration</th>
+        <th>Wall Start</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="chapters-section">
+  <h2>YouTube Chapters</h2>
+  <textarea id="chapters" readonly placeholder="Set stream start time above to generate chapter markers…"></textarea>
+  <div class="copy-row">
+    <span class="copy-confirm" id="copy-confirm">Copied!</span>
+    <button onclick="copyChapters()">Copy to Clipboard</button>
+  </div>
+</div>
+
+<script>
+  let matches = [];
+
+  function pad(n) { return String(Math.floor(n)).padStart(2, '0'); }
+
+  function fmtRelative(ms) {
+    if (ms < 0) ms = 0;
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  }
+
+  function fmtWall(epochMs) {
+    const d = new Date(epochMs);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function fmtDuration(startMs, endMs) {
+    if (!endMs) return '—';
+    const s = Math.floor((endMs - startMs) / 1000);
+    return `${Math.floor(s / 60)}:${pad(s % 60)}`;
+  }
+
+  function getOffset() {
+    const val = document.getElementById('stream-start').value;
+    return val ? new Date(val).getTime() : null;
+  }
+
+  // Pre-fill date to today; user only needs to set the time for today's event
+  function initStreamStart() {
+    const el = document.getElementById('stream-start');
+    if (!el.value) {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm   = String(now.getMonth() + 1).padStart(2, '0');
+      const dd   = String(now.getDate()).padStart(2, '0');
+      el.value = `${yyyy}-${mm}-${dd}T00:00:00`;
+    }
+  }
+
+  function render() {
+    const offset = getOffset();
+    const tbody = document.getElementById('tbody');
+    const chaptersEl = document.getElementById('chapters');
+
+    tbody.innerHTML = matches.map(m => {
+      const relMs = offset !== null ? m.activeSince - offset : null;
+      const timeCell = relMs !== null
+        ? `<span class="chapter-time">${fmtRelative(relMs)}</span>`
+        : `<span class="chapter-time no-offset">${fmtWall(m.activeSince)}</span>`;
+      const statusCell = m.state === 'active'
+        ? `<span class="status-active">Live</span>`
+        : '';
+      const winnerCell = m.winner
+        ? `<span class="winner">${m.winner}</span>`
+        : `<span class="method">—</span>`;
+
+      return `<tr class="${m.state === 'active' ? 'active-row' : ''}">
+        <td>${timeCell}</td>
+        <td>${m.player1} <span style="color:var(--gray)">vs</span> ${m.player2} ${statusCell}</td>
+        <td><span class="bracket">${m.bracket} · ${m.round}</span></td>
+        <td>${winnerCell}</td>
+        <td><span class="method">${m.method ?? '—'}</span></td>
+        <td><span class="duration">${fmtDuration(m.activeSince, m.endTime)}</span></td>
+        <td><span class="duration">${fmtWall(m.activeSince)}</span></td>
+      </tr>`;
+    }).join('');
+
+    // YouTube chapters
+    if (offset !== null && matches.length) {
+      const lines = ['0:00 Stream Start'];
+      for (const m of matches) {
+        const relMs = m.activeSince - offset;
+        if (relMs < 0) continue; // match happened before stream start
+        lines.push(`${fmtRelative(relMs)} ${m.player1} vs ${m.player2} (${m.bracket} ${m.round})`);
+      }
+      chaptersEl.value = lines.join('\n');
+    } else if (offset === null) {
+      chaptersEl.value = matches.map(m =>
+        `${fmtWall(m.activeSince)} ${m.player1} vs ${m.player2} (${m.bracket} ${m.round})`
+      ).join('\n');
+    }
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch('/api/matchlog');
+      matches = await res.json();
+      document.getElementById('status').textContent =
+        `${matches.length} match${matches.length !== 1 ? 'es' : ''} logged · last refreshed ${new Date().toLocaleTimeString()}`;
+      render();
+    } catch (e) {
+      document.getElementById('status').textContent = 'Error loading match log';
+    }
+  }
+
+  function clearOffset() {
+    document.getElementById('stream-start').value = '';
+    render();
+  }
+
+  function copyChapters() {
+    const text = document.getElementById('chapters').value;
+    navigator.clipboard.writeText(text).then(() => {
+      const el = document.getElementById('copy-confirm');
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2000);
+    });
+  }
+
+  document.getElementById('stream-start').addEventListener('input', render);
+
+  initStreamStart();
+  refresh();
+  setInterval(refresh, 15000);
+</script>
+</body>
+</html>

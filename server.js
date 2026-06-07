@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const { poll } = require('./poller');
+const { poll, buildMatchLog } = require('./poller');
 
 const PORT = process.env.PORT || 3000;
 const TOURNAMENT_IDS = (process.env.TRUEFINALS_TOURNAMENT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -21,6 +21,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/story', async (req, res) => {
   const story = await poll(TOURNAMENT_IDS);
   res.json(story);
+});
+
+app.get('/api/matchlog', async (req, res) => {
+  await poll(TOURNAMENT_IDS); // ensure raw cache is warm
+  res.json(buildMatchLog(TOURNAMENT_IDS));
 });
 
 // Background poll to keep cache warm
