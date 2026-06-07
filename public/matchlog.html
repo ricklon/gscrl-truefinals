@@ -251,16 +251,26 @@
     return val ? new Date(val).getTime() : null;
   }
 
-  // Pre-fill date to today; user only needs to set the time for today's event
+  const STORAGE_KEY = 'gscrl-stream-start';
+
   function initStreamStart() {
     const el = document.getElementById('stream-start');
-    if (!el.value) {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      el.value = saved;
+    } else {
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm   = String(now.getMonth() + 1).padStart(2, '0');
       const dd   = String(now.getDate()).padStart(2, '0');
       el.value = `${yyyy}-${mm}-${dd}T00:00:00`;
     }
+  }
+
+  function saveStreamStart() {
+    const val = document.getElementById('stream-start').value;
+    if (val) localStorage.setItem(STORAGE_KEY, val);
+    else localStorage.removeItem(STORAGE_KEY);
   }
 
   function render() {
@@ -321,6 +331,7 @@
 
   function clearOffset() {
     document.getElementById('stream-start').value = '';
+    localStorage.removeItem(STORAGE_KEY);
     render();
   }
 
@@ -333,7 +344,7 @@
     });
   }
 
-  document.getElementById('stream-start').addEventListener('input', render);
+  document.getElementById('stream-start').addEventListener('input', () => { saveStreamStart(); render(); });
 
   initStreamStart();
   refresh();
