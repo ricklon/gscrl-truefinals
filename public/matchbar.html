@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GSCRL Match Bar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Inter:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100vw; height: 100vh;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    /* ── SINGLE STRIP across the top ── */
+    #bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 48px;
+      display: flex;
+      align-items: stretch;
+      opacity: 0;
+      transform: translateY(-100%);
+      transition: opacity 350ms ease, transform 350ms cubic-bezier(0.22,1,0.36,1);
+    }
+    #bar.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── Score badges ── */
+    .score {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      background: #FF6B6B;
+      font-family: 'Russo One', sans-serif;
+      font-size: 1.6rem;
+      color: #fff;
+      flex-shrink: 0;
+      transition: background 250ms ease;
+    }
+    .score.flash { background: #ff2222; }
+
+    /* ── Bot name sections ── */
+    .side {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      background: rgba(15,15,26,0.93);
+      padding: 0 14px;
+      gap: 8px;
+      min-width: 0;
+    }
+    .side.right { flex-direction: row-reverse; }
+
+    .bot-name {
+      font-family: 'Russo One', sans-serif;
+      font-size: 1.05rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ci-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #333;
+      flex-shrink: 0;
+      transition: background 400ms, box-shadow 400ms;
+    }
+    .ci-dot.ready { background: #4ECDC4; box-shadow: 0 0 6px #4ECDC4; }
+
+    /* ── Center: current match bracket/round ── */
+    .center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,10,20,0.96);
+      padding: 0 20px;
+      white-space: nowrap;
+      border-top: 2px solid #4ECDC4;
+      flex-shrink: 0;
+      gap: 1px;
+    }
+    .center-bracket {
+      font-size: 0.5rem;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #4ECDC4;
+    }
+    .center-round {
+      font-family: 'Russo One', sans-serif;
+      font-size: 0.8rem;
+      color: #fff;
+    }
+
+    /* ── Divider between current match and last result ── */
+    .divider {
+      width: 1px;
+      background: rgba(78,205,196,0.25);
+      flex-shrink: 0;
+      align-self: stretch;
+    }
+
+    /* ── Last result: inline, right of divider ── */
+    #last-result {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: rgba(10,10,20,0.88);
+      padding: 0 14px;
+      width: 260px;
+      flex-shrink: 0;
+      border-top: 2px solid rgba(78,205,196,0.3);
+      overflow: hidden;
+      transition: opacity 300ms ease;
+    }
+    #last-result.empty { opacity: 0.3; }
+
+    .result-label {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.48rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #4ECDC4;
+      margin-bottom: 1px;
+    }
+    .result-winner {
+      font-family: 'Russo One', sans-serif;
+      font-size: 0.82rem;
+      color: #FF6B6B;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result-detail {
+      font-family: 'Inter', sans-serif;
+      font-size: 0.55rem;
+      color: #555;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="bar">
+  <!-- Left: score + bot name -->
+  <div class="score" id="score1">0</div>
+  <div class="side left">
+    <span class="ci-dot" id="ci1"></span>
+    <span class="bot-name" id="name1">—</span>
+  </div>
+
+  <!-- Center: bracket + round -->
+  <div class="center">
+    <span class="center-bracket" id="bracket-label"></span>
+    <span class="center-round"   id="round-label">—</span>
+  </div>
+
+  <!-- Right: bot name + score -->
+  <div class="side right">
+    <span class="ci-dot" id="ci2"></span>
+    <span class="bot-name" id="name2">—</span>
+  </div>
+  <div class="score" id="score2">0</div>
+
+  <!-- Divider -->
+  <div class="divider"></div>
+
+  <!-- Last result — inline, same height -->
+  <div id="last-result" class="empty">
+    <div class="result-label">Last Result</div>
+    <div class="result-winner" id="result-winner">—</div>
+    <div class="result-detail" id="result-detail"></div>
+  </div>
+</div>
+
+<script>
+  const POLL_MS = 3000;
+  let prevScores = [0, 0];
+
+  function parseGameName(name) {
+    const m = name && name.match(/^([WL]):(\d+)-/);
+    if (!m) return { bracket: '', round: name || '—' };
+    return {
+      bracket: m[1] === 'W' ? 'Winners' : 'Losers',
+      round: `Round ${m[2]}`
+    };
+  }
+
+  function flash(el) {
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 400);
+  }
+
+  function renderBar(game) {
+    const bar = document.getElementById('bar');
+    if (!game) { bar.classList.remove('visible'); return; }
+
+    const { bracket, round } = parseGameName(game.name);
+
+    document.getElementById('name1').textContent = game.player1;
+    document.getElementById('name2').textContent = game.player2;
+
+    const s1 = document.getElementById('score1');
+    const s2 = document.getElementById('score2');
+    if (game.score1 !== prevScores[0]) { flash(s1); prevScores[0] = game.score1; }
+    if (game.score2 !== prevScores[1]) { flash(s2); prevScores[1] = game.score2; }
+    s1.textContent = game.score1;
+    s2.textContent = game.score2;
+
+    document.getElementById('bracket-label').textContent = bracket;
+    document.getElementById('round-label').textContent   = round;
+    document.getElementById('ci1').className = 'ci-dot' + (game.checkedIn1 ? ' ready' : '');
+    document.getElementById('ci2').className = 'ci-dot' + (game.checkedIn2 ? ' ready' : '');
+
+    bar.classList.add('visible');
+  }
+
+  function renderLastResult(result) {
+    const el = document.getElementById('last-result');
+    if (!result) { el.classList.add('empty'); return; }
+
+    const isBye  = result.resultAnnotation === 'BY';
+    const method = isBye ? '' : (result.resultAnnotation ? ` · ${result.resultAnnotation}` : '');
+    const { bracket, round } = parseGameName(result.name);
+
+    document.getElementById('result-winner').textContent =
+      result.winner ? `${result.winner} won${method}` : (isBye ? 'Bye' : '—');
+    document.getElementById('result-detail').textContent =
+      `${result.player1} vs ${result.player2} · ${bracket} ${round}`;
+
+    el.classList.remove('empty');
+  }
+
+  async function fetchAndRender() {
+    try {
+      const res  = await fetch('/api/story');
+      const data = await res.json();
+      const t    = data?.tournaments?.[0];
+      renderBar(t?.nowFighting?.[0] ?? null);
+      renderLastResult(t?.result?.[0] ?? null);
+    } catch (e) {
+      console.warn('fetch error', e);
+    }
+  }
+
+  fetchAndRender();
+  setInterval(fetchAndRender, POLL_MS);
+</script>
+</body>
+</html>
