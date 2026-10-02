@@ -186,6 +186,7 @@
   </div>
 </div>
 
+<script src="/event.js"></script>
 <script>
   const POLL_MS = 3000;
   let prevScores = [0, 0];
@@ -204,9 +205,21 @@
     setTimeout(() => el.classList.remove('flash'), 400);
   }
 
-  function renderBar(game) {
+  function renderBar(game, isNext = false) {
     const bar = document.getElementById('bar');
-    if (!game) { bar.classList.remove('visible'); return; }
+    if (!game) {
+      document.getElementById('name1').textContent = 'TBD';
+      document.getElementById('name2').textContent = 'TBD';
+      document.getElementById('score1').textContent = '—';
+      document.getElementById('score2').textContent = '—';
+      document.getElementById('bracket-label').textContent = 'Next Match';
+      document.getElementById('round-label').textContent = 'TBD';
+      document.getElementById('ci1').className = 'ci-dot';
+      document.getElementById('ci2').className = 'ci-dot';
+      prevScores = [0, 0];
+      bar.classList.add('visible');
+      return;
+    }
 
     const { bracket, round } = parseGameName(game.name);
 
@@ -215,13 +228,20 @@
 
     const s1 = document.getElementById('score1');
     const s2 = document.getElementById('score2');
-    if (game.score1 !== prevScores[0]) { flash(s1); prevScores[0] = game.score1; }
-    if (game.score2 !== prevScores[1]) { flash(s2); prevScores[1] = game.score2; }
-    s1.textContent = game.score1;
-    s2.textContent = game.score2;
-
-    document.getElementById('bracket-label').textContent = bracket;
-    document.getElementById('round-label').textContent   = round;
+    if (isNext) {
+      s1.textContent = '—';
+      s2.textContent = '—';
+      prevScores = [0, 0];
+      document.getElementById('bracket-label').textContent = 'Next Match';
+      document.getElementById('round-label').textContent = `${bracket} ${round}`.trim();
+    } else {
+      if (game.score1 !== prevScores[0]) { flash(s1); prevScores[0] = game.score1; }
+      if (game.score2 !== prevScores[1]) { flash(s2); prevScores[1] = game.score2; }
+      s1.textContent = game.score1;
+      s2.textContent = game.score2;
+      document.getElementById('bracket-label').textContent = bracket;
+      document.getElementById('round-label').textContent = round;
+    }
     document.getElementById('ci1').className = 'ci-dot' + (game.checkedIn1 ? ' ready' : '');
     document.getElementById('ci2').className = 'ci-dot' + (game.checkedIn2 ? ' ready' : '');
 
@@ -248,8 +268,11 @@
     try {
       const res  = await fetch('/api/story');
       const data = await res.json();
-      const t    = data?.tournaments?.[0];
-      renderBar(t?.nowFighting?.[0] ?? null);
+      const tournaments = data?.tournaments ?? [];
+      const t = selectTournament(tournaments);
+      const active = t?.nowFighting?.[0] ?? null;
+      const called = t?.upNext?.[0] ?? null;
+      renderBar(active || called, !active && !!called);
       renderLastResult(t?.result?.[0] ?? null);
     } catch (e) {
       console.warn('fetch error', e);

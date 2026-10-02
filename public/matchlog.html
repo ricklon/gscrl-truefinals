@@ -49,7 +49,8 @@
       text-transform: uppercase;
       color: var(--gray);
     }
-    input[type="datetime-local"] {
+    input[type="datetime-local"],
+    input[type="text"].offset-input {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -59,7 +60,9 @@
       padding: 8px 10px;
       outline: none;
     }
-    input[type="datetime-local"]:focus { border-color: var(--teal); }
+    input[type="datetime-local"]:focus,
+    input[type="text"].offset-input:focus { border-color: var(--teal); }
+    input[type="text"].offset-input { width: 90px; font-family: 'JetBrains Mono', monospace; }
 
     button {
       background: var(--teal);
@@ -189,6 +192,10 @@
     <label>Stream / Recording Start</label>
     <input type="datetime-local" id="stream-start" step="1">
   </div>
+  <div class="field">
+    <label>Fights Start At (MM:SS into stream)</label>
+    <input type="text" id="fight-offset" class="offset-input" placeholder="51:01" maxlength="8">
+  </div>
   <button onclick="refresh()">Refresh</button>
   <button class="secondary" onclick="clearOffset()">Clear Offset</button>
 </div>
@@ -251,7 +258,23 @@
     return val ? new Date(val).getTime() : null;
   }
 
-  const STORAGE_KEY = 'gscrl-stream-start';
+  // Parse "MM:SS" or "H:MM:SS" → milliseconds. Returns 0 if unparseable.
+  function parseFightOffset(str) {
+    if (!str || !str.trim()) return 0;
+    const parts = str.trim().split(':').map(Number);
+    if (parts.some(isNaN)) return 0;
+    if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 1000;
+    if (parts.length === 3) return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+    return 0;
+  }
+
+  function getFightOffsetMs() {
+    return parseFightOffset(document.getElementById('fight-offset').value);
+  }
+
+  let STORAGE_KEY;
+  let FIGHT_OFFSET_KEY;
+
 
   function initStreamStart() {
     const el = document.getElementById('stream-start');
@@ -265,21 +288,32 @@
       const dd   = String(now.getDate()).padStart(2, '0');
       el.value = `${yyyy}-${mm}-${dd}T00:00:00`;
     }
+    const savedFightOffset = localStorage.getItem(FIGHT_OFFSET_KEY);
+    if (savedFightOffset) document.getElementById('fight-offset').value = savedFightOffset;
   }
 
   function saveStreamStart() {
+    if (!STORAGE_KEY) return;
     const val = document.getElementById('stream-start').value;
     if (val) localStorage.setItem(STORAGE_KEY, val);
     else localStorage.removeItem(STORAGE_KEY);
   }
 
+  function saveFightOffset() {
+    if (!FIGHT_OFFSET_KEY) return;
+    const val = document.getElementById('fight-offset').value;
+    if (val) localStorage.setItem(FIGHT_OFFSET_KEY, val);
+    else localStorage.removeItem(FIGHT_OFFSET_KEY);
+  }
+
   function render() {
     const offset = getOffset();
+    const fightOffsetMs = getFightOffsetMs();
     const tbody = document.getElementById('tbody');
     const chaptersEl = document.getElementById('chapters');
 
     tbody.innerHTML = matches.map(m => {
-      const relMs = offset !== null ? m.activeSince - offset : null;
+      const relMs = offset !== null ? (m.activeSince - offset) + fightOffsetMs : null;
       const timeCell = relMs !== null
         ? `<span class="chapter-time">${fmtRelative(relMs)}</span>`
         : `<span class="chapter-time no-offset">${fmtWall(m.activeSince)}</span>`;
@@ -304,9 +338,10 @@
     // YouTube chapters
     if (offset !== null && matches.length) {
       const lines = ['0:00 Stream Start'];
+      if (fightOffsetMs > 0) lines.push(`${fmtRelative(fightOffsetMs)} Fights Begin`);
       for (const m of matches) {
-        const relMs = m.activeSince - offset;
-        if (relMs < 0) continue; // match happened before stream start
+        const relMs = (m.activeSince - offset) + fightOffsetMs;
+        if (relMs < 0) continue;
         lines.push(`${fmtRelative(relMs)} ${m.player1} vs ${m.player2} (${m.bracket} ${m.round})`);
       }
       chaptersEl.value = lines.join('\n');
@@ -330,8 +365,11 @@
   }
 
   function clearOffset() {
+    if (!STORAGE_KEY) return;
     document.getElementById('stream-start').value = '';
+    document.getElementById('fight-offset').value = '';
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(FIGHT_OFFSET_KEY);
     render();
   }
 
@@ -345,10 +383,25 @@
   }
 
   document.getElementById('stream-start').addEventListener('input', () => { saveStreamStart(); render(); });
+  document.getElementById('fight-offset').addEventListener('input', () => { saveFightOffset(); render(); });
 
-  initStreamStart();
-  refresh();
-  setInterval(refresh, 15000);
+  async function init() {
+    try {
+      const res = await fetch('/api/event');
+      if (!res.ok) throw new Error('Event unavailable');
+      const event = await res.json();
+      document.querySelector('h1').textContent = `${event.name} — Match Log`;
+      document.title = `${event.name} — Match Log`;
+      STORAGE_KEY = `gscrl:${event.id}:stream-start`;
+      FIGHT_OFFSET_KEY = `gscrl:${event.id}:fight-offset`;
+      initStreamStart();
+      refresh();
+      setInterval(refresh, 15000);
+    } catch (e) {
+      document.getElementById('status').textContent = 'Unable to load event. Reload to retry.';
+    }
+  }
+  init();
 </script>
 </body>
 </html>

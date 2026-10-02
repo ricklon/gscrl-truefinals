@@ -1,0 +1,23 @@
+{
+  "activeEvent": "mechanical-mayhem-season-5-opener",
+  "events": {
+    "mechanical-mayhem-season-5-opener": {
+      "name": "GSCRL Mechanical Mayhem Season 5 Opener",
+      "url": "https://www.robotcombatevents.com/events/9596",
+      "divisions": [
+        { "key": "fairies", "name": "Fairies", "aliases": ["fairyweight"], "tournamentId": "12d25847dc964a64" },
+        { "key": "plants", "name": "Plants", "aliases": [], "tournamentId": "79b98376f28f4dc5" },
+        { "key": "ants", "name": "Ants", "aliases": ["antweight"], "tournamentId": "2c1a522669b34fec" },
+        { "key": "beetles", "name": "Beetles", "aliases": ["beetleweight"], "tournamentId": "f1bacdd759cd41e1" }
+      ]
+    },
+    "nj-champs": {
+      "name": "GSCRL NJ Champs — Season Finale",
+      "divisions": [
+        { "key": "ants", "name": "Ants", "aliases": ["antweight"], "tournamentId": "1b730f90f7614efc" },
+        { "key": "plants", "name": "Plants", "aliases": [], "tournamentId": "44cc324827654000" },
+        { "key": "beetles", "name": "Beetles", "aliases": ["beetleweight"], "tournamentId": "a3478e28e29f47b5" }
+      ]
+    }
+  }
+}

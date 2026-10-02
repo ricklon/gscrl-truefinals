@@ -5,8 +5,9 @@ before scaffolding or editing the project.
 
 ## Status
 
-**New repo. Nothing is built yet.** Everything below is the spec to build toward,
-not a description of existing code.
+Historical design brief. The application is implemented; see README.md for
+current setup and event transitions, and AGENTS.md for contributor guidance.
+The original specification below is retained as design context.
 
 ## Purpose
 

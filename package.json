@@ -5,8 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "check": "node --check server.js && node --check poller.js && node --check config.js && node --check public/event.js"
   },
+  "engines": { "node": ">=22" },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2"
