@@ -155,9 +155,9 @@
 <body>
   <div class="container" id="root"></div>
 
+  <script src="/event.js"></script>
   <script>
     const POLL_MS = 3000;
-
     function checkinDot(checked) {
       return `<span class="checkin-dot ${checked ? 'ready' : ''}"></span>`;
     }
@@ -187,7 +187,7 @@
     function renderUpNext(games) {
       const isEmpty = !games.length;
       const inner = isEmpty
-        ? '<span class="no-data">No match called</span>'
+        ? '<span class="no-data">Next match TBD</span>'
         : games.map(renderMatchup).join('');
       return `<div class="beat beat-next ${isEmpty ? 'empty' : ''}">
         <div class="beat-label">Up Next</div>
@@ -222,7 +222,7 @@
         return;
       }
 
-      const t = data.tournaments[0];
+      const t = selectTournament(data.tournaments);
       if (!t) {
         root.innerHTML = '<div class="beat"><span class="no-data">No tournament data</span></div>';
         return;

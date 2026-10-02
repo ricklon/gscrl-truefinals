@@ -8,12 +8,23 @@ const HEADERS = {
 };
 
 // Rate limit: 10 req / 60s window.
-// Strategy: full tournament fetch once at startup (title + players + games),
-// then games-only every 8s (7.5 req/min). Re-fetch players every 10 min.
-const GAMES_POLL_MS = 8000;
-const PLAYERS_TTL_MS = 2 * 60 * 1000; // ~1 match cycle; leaves headroom within 10 req/min rate limit
+// Space every request, including startup, refreshes and retries, below 10/min.
+const REQUEST_INTERVAL_MS = 6500;
+let requestQueue = Promise.resolve();
+let nextRequestAt = 0;
+const PLAYERS_TTL_MS = 10 * 60 * 1000;
 
 function apiFetch(path) {
+  const result = requestQueue.then(async () => {
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, nextRequestAt - Date.now())));
+    nextRequestAt = Date.now() + REQUEST_INTERVAL_MS;
+    return request(path);
+  });
+  requestQueue = result.catch(() => {});
+  return result;
+}
+
+function request(path) {
   return new Promise((resolve, reject) => {
     const url = new URL(BASE_URL + path);
     const req = https.get({ hostname: url.hostname, path: url.pathname + url.search, headers: HEADERS }, (res) => {
@@ -23,7 +34,7 @@ function apiFetch(path) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try { resolve(JSON.parse(data)); } catch (e) { reject(new Error('JSON parse error')); }
         } else {
-          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          reject(new Error(`TrueFinals HTTP ${res.statusCode}`));
         }
       });
     });
@@ -67,6 +78,7 @@ function buildStory(games, players) {
       resultAnnotation: game.resultAnnotation ?? null,
       winnerPlacement: game.winnerPlacement ?? null,
       loserPlacement: game.loserPlacement ?? null,
+      endTime: game.endTime ?? null,
     };
   }
 
@@ -74,7 +86,7 @@ function buildStory(games, players) {
   const upNext = games.filter(g => g.state === 'called').map(gameMatchup);
 
   const done = games
-    .filter(g => g.state === 'done' && g.endTime)
+    .filter(g => g.state === 'done' && g.endTime && g.resultAnnotation !== 'BY')
     .sort((a, b) => b.endTime - a.endTime);
 
   const result = done.slice(0, 3).map(game => {
@@ -89,13 +101,16 @@ function buildStory(games, players) {
 let cache = null;
 let rawCache = {}; // { [tournamentId]: { games, players } } — for matchlog
 let lastFetch = 0;
+let inFlight = null;
 
 async function poll(tournamentIds) {
   const now = Date.now();
-  if (cache && now - lastFetch < GAMES_POLL_MS) return cache;
+  if (inFlight) return inFlight;
+  if (now - lastFetch < Math.max(21000, tournamentIds.length * REQUEST_INTERVAL_MS)) return cache;
 
-  try {
-    const stories = await Promise.all(
+  inFlight = (async () => {
+    try {
+    const results = await Promise.allSettled(
       tournamentIds.map(async (id) => {
         const { title, players } = await getStatic(id);
         const games = await apiFetch(`/v1/tournaments/${id}/games`);
@@ -103,14 +118,23 @@ async function poll(tournamentIds) {
         return { tournamentId: id, tournamentTitle: title, ...buildStory(games, players) };
       })
     );
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    const stories = results.map(result => result.value);
     cache = { ok: true, tournaments: stories, fetchedAt: Date.now() };
     lastFetch = Date.now();
-  } catch (err) {
-    console.error('[poller] fetch error:', err.message);
-    cache = cache ?? { ok: false, error: err.message, tournaments: [] };
-  }
+    } catch (err) {
+      console.error('[poller] fetch error:', err.message);
+      cache = cache ?? { ok: false, error: err.message, tournaments: [] };
+    } finally {
+      lastFetch = Date.now(); // also back off after failed requests
+      inFlight = null;
+    }
 
-  return cache;
+    return cache;
+  })();
+
+  return inFlight;
 }
 
 function buildMatchLog(tournamentIds) {
